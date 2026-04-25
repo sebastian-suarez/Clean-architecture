@@ -1,0 +1,39 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { listUsersCommand } from "#presentation/cli/commands/list-users.js";
+
+describe("listUsersCommand", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("prints '(no users)' when the use case returns an empty list", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+		await listUsersCommand([], {
+			listUsers: {
+				async execute() {
+					return [];
+				},
+			},
+		});
+		expect(log).toHaveBeenCalledTimes(1);
+		expect(log).toHaveBeenCalledWith("(no users)");
+	});
+
+	it("prints one tab-separated line per user", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+		await listUsersCommand([], {
+			listUsers: {
+				async execute() {
+					return [
+						{ id: "1", name: "A", email: "a@b.co", createdAt: "x" },
+						{ id: "2", name: "B", email: "b@c.co", createdAt: "x" },
+					];
+				},
+			},
+		});
+
+		expect(log).toHaveBeenCalledTimes(2);
+		expect(log).toHaveBeenNthCalledWith(1, "1\ta@b.co\tA");
+		expect(log).toHaveBeenNthCalledWith(2, "2\tb@c.co\tB");
+	});
+});
