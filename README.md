@@ -15,6 +15,25 @@ A TypeScript + Node.js (ESM) template that scaffolds a project around **Clean Ar
 
 ---
 
+## 📚 What `AGENTS.md` enforces
+
+A one-line index of the binding rules. Click through to [`AGENTS.md`](./AGENTS.md) for the full contract.
+
+- **§0 Glossary** — shared vocabulary (entity, VO, aggregate, port, adapter, decorator, read model, …).
+- **§1 The dependency rule** — inward-only imports, SOLID, plus Screaming Architecture, Plugin Architecture, Persistence Ignorance, SDP/SAP, Humble Object.
+- **§2 Layer responsibilities** — what each layer may and may not do; composition root + config rules.
+- **§3 Domain modeling** — entities (typed ids, rich-not-anemic, `create` vs `reconstruct`), VOs, aggregates, services, errors, events, transactional rules (atomicity, optimistic concurrency).
+- **§4 Application layer** — CQS / read-model escape hatch, three validation tiers, throw-don't-return error handling, idempotency, use-case decorators, DTO contract, mapper purity.
+- **§5 Ports & adapters** — port conventions, repositories (paginated by default, optimistic-locking-aware), mandatory in-memory adapter, ACL.
+- **§6 Cross-cutting** — logging, time/identity (UTC `Clock`, monotonic when needed), config, auth, inter-context communication, sagas, secrets.
+- **§7 Naming & file conventions** — kebab-case, `#layer/*` aliases, full file-suffix table.
+- **§8 Recipes** — add a use case, aggregate, adapter, delivery mechanism, env var, error code, decorator, read model.
+- **§9 Forbidden patterns** — every rejection reason in one place.
+- **§10 Testing** — per-layer strategy, conventions, contract tests, test data builders.
+- **§11 Verification** — `lint` / `test` / smoke commands before declaring done.
+
+---
+
 ## 🧩 The four layers
 
 ```
@@ -148,7 +167,22 @@ Notice that `Route` only ever speaks to `UC` via its input port and to `Client` 
 
 ```bash
 npm install
+cp .env.example .env   # optional: tweak local config
 ```
+
+## ⚙️ Configuration
+
+All env vars are read in **one place**, `src/config.ts` (the only module allowed to touch `process.env`). Both composition roots call `loadConfig()` and pass the result inward — no other layer reads env vars.
+
+| Variable          | Default              | Notes                                                     |
+| ----------------- | -------------------- | --------------------------------------------------------- |
+| `USERS_DATA_FILE` | `./.data/users.json` | Path used by `JsonFileUserRepository`.                    |
+| `PORT`            | `3000`               | HTTP server port. Validated to be an integer in 1..65535. |
+| `NODE_ENV`        | `development`        | One of `development` \| `production` \| `test`.           |
+
+**Local development:** copy `.env.example` to `.env`. `dotenv` is a **devDependency** that loads `.env` only when `NODE_ENV !== "production"` — see `src/config.ts`.
+
+**Production:** inject env vars via your runtime (Docker, systemd, Kubernetes, fly.io, …). `dotenv` is not required and will not be loaded.
 
 ## ▶️ Scripts
 
@@ -164,7 +198,7 @@ npm install
 
 ## 💻 CLI usage
 
-Persistence defaults to `./.data/users.json`. Override with `USERS_DATA_FILE=/path/to/users.json`.
+Persistence defaults to `./.data/users.json`. Override with `USERS_DATA_FILE=/path/to/users.json` (env var or `.env`).
 
 ```bash
 npm start -- create-user --name "Alice" --email "alice@example.com"
@@ -236,7 +270,10 @@ import { CreateUser } from "#application/use-cases/create-user.js";
 | Domain         | Value-object validation, entity invariants, error semantics | Pure unit tests; no doubles                                                |
 | Application    | Use-case orchestration                                      | Drive via input port; in-memory repo + hand-rolled `Clock` / `IdGenerator` |
 | Infrastructure | Adapter behavior                                            | Integration test against the real fs / DB                                  |
+| Adapters (≥2)  | Behavioral equivalence across implementations of one port   | Shared **contract test** (`AGENTS.md` §10.3) called by each adapter's spec |
 | Presentation   | Routing, status mapping, arg parsing                        | Stub the input ports with fake use cases                                   |
+
+Construct fixtures via **test data builders** (`aUser().withEmail("…").build()`) under `tests/<context>/builders/` so invariant changes ripple through one builder, not fifty tests (`AGENTS.md` §10.2).
 
 Tests live mirroring `src/`:
 

@@ -1,4 +1,3 @@
-import { resolve } from "node:path";
 import process from "node:process";
 import { CreateUser } from "#application/use-cases/create-user.js";
 import { GetUser } from "#application/use-cases/get-user.js";
@@ -7,11 +6,11 @@ import { SystemClock } from "#infrastructure/clock/system-clock.js";
 import { CryptoIdGenerator } from "#infrastructure/id/crypto-id-generator.js";
 import { JsonFileUserRepository } from "#infrastructure/persistence/json-file-user-repository.js";
 import { runCli } from "#presentation/cli/cli.js";
+import { loadConfig } from "#src/config.js";
 
-const dataFile =
-	process.env.USERS_DATA_FILE ?? resolve(process.cwd(), ".data/users.json");
+const config = loadConfig();
 
-const users = new JsonFileUserRepository(dataFile);
+const users = new JsonFileUserRepository(config.dataFile);
 const ids = new CryptoIdGenerator();
 const clock = new SystemClock();
 
