@@ -1,222 +1,152 @@
 # 🧱 Clean Architecture Template
 
-A TypeScript + Node.js (ESM) template that scaffolds a project around **Clean Architecture** / **Ports & Adapters**. Fork it as a base for new services, APIs, CLIs, or workers.
+A TypeScript + Node.js (ESM) template that scaffolds a project around **Clean Architecture** / **Ports & Adapters** / **DDD**. Fork it as a base for new services, APIs, CLIs, or workers.
 
-> **Read `AGENTS.md` before contributing.** It is the binding contract for layer boundaries and forbidden patterns.
-
----
-
-## 🎯 Goals
-
-- Keep business rules independent from frameworks, databases, and transports.
-- Enforce **dependency inversion**: outer layers depend on inner layers, never the reverse.
-- Make swapping infrastructure (DB, HTTP framework, message bus) a localized change.
-- Demonstrate **every** Clean Architecture concept in working code: entities, value objects, use cases, input ports, output ports, DTOs, mappers, multiple adapters, two delivery mechanisms, and a single composition root per delivery.
+> **Read [`AGENTS.md`](./AGENTS.md) before contributing.** It is the binding contract for layer boundaries, naming, forbidden patterns, and testing conventions.
 
 ---
 
-## 📚 What `AGENTS.md` enforces
+## 🎯 What this template demonstrates
 
-A one-line index of the binding rules. Click through to [`AGENTS.md`](./AGENTS.md) for the full contract.
+The template is intentionally larger than a "Hello World" because the goal is to demonstrate **every** Clean Architecture / DDD / Hexagonal pattern in working code:
 
-- **§0 Glossary** — shared vocabulary (entity, VO, aggregate, port, adapter, decorator, read model, …).
-- **§1 The dependency rule** — inward-only imports, SOLID, plus Screaming Architecture, Plugin Architecture, Persistence Ignorance, SDP/SAP, Humble Object.
-- **§2 Layer responsibilities** — what each layer may and may not do; composition root + config rules.
-- **§3 Domain modeling** — entities (typed ids, rich-not-anemic, `create` vs `reconstruct`), VOs, aggregates, services, errors, events, transactional rules (atomicity, optimistic concurrency).
-- **§4 Application layer** — CQS / read-model escape hatch, three validation tiers, throw-don't-return error handling, idempotency, use-case decorators, DTO contract, mapper purity.
-- **§5 Ports & adapters** — port conventions, repositories (paginated by default, optimistic-locking-aware), mandatory in-memory adapter, ACL.
-- **§6 Cross-cutting** — logging, time/identity (UTC `Clock`, monotonic when needed), config, auth, inter-context communication, sagas, secrets.
-- **§7 Naming & file conventions** — kebab-case, `#layer/*` aliases, full file-suffix table.
-- **§8 Recipes** — add a use case, aggregate, adapter, delivery mechanism, env var, error code, decorator, read model.
-- **§9 Forbidden patterns** — every rejection reason in one place.
-- **§10 Testing** — per-layer strategy, conventions, contract tests, test data builders.
-- **§11 Verification** — `lint` / `test` / smoke commands before declaring done.
+- **Two bounded contexts** (`User`, `Order`) with their own ubiquitous languages.
+- **Rich entities** with private constructors, `static create` (creation invariants) + `static reconstruct` (hydration), behavior methods, domain events.
+- **Aggregates** with inner entities, optimistic concurrency (`version`), and Vernon's four design rules.
+- **Value objects** with closure of operations (`Money.add`), self-validation, equality semantics.
+- **Domain primitives** in two flavors: VO classes (`UserId`) and TS branded types (`CustomerId`).
+- **Domain services**, **factories**, **specifications**, **events**, errors with stable codes.
+- **Use cases** (one per business operation) implementing **input ports**, depending on **driven output ports**.
+- **Use-case decorators** for every cross-cutting concern: logging, tracing, metrics, audit, authorization, retry, idempotency, rate-limiting, caching.
+- **Output Boundary** (Presenter port) on `PlaceOrder` — the inverted alternative to returning a DTO.
+- **Saga / process manager** subscribing to a domain event.
+- **Anti-Corruption Layer** between contexts (`InProcessCustomerLookup` translates `User` → `CustomerSummaryDto`).
+- **Three delivery mechanisms**: CLI, HTTP, and a stdin-driven queue worker — each with its own composition root.
+- **In-memory adapter** for every output port (mandatory — §5.3).
+- **Contract tests** so two adapters (in-memory + JSON-file) are runtime-substitutable.
+- **Architectural fitness function** tests that fail when the dependency rule, no-cross-context rule, composition-root rule, no-barrels rule, or `process.env`-isolation rule is violated.
+- **Test data builders** (`aUser()`, `anOrder()`) so invariants live in one place.
+- **Property-based tests** for `Money` algebraic laws.
+- **ADRs** (`docs/adr/`) and a **context map** (`docs/context-map.md`).
 
 ---
 
-## 🧩 The four layers
+## 🧩 Project tree
 
 ```
 src/
-├── domain/         ← Enterprise business rules
-│   ├── shared/         · DomainError base class
-│   └── user/           · User entity, Email value object, domain errors
-├── application/    ← Use cases, ports, DTOs (no I/O, no frameworks)
-│   ├── dtos/           · UserDto (primitives only)
-│   ├── mappers/        · userMapper (entity → DTO)
+├── domain/                                  ← Pure business rules
+│   ├── shared/
+│   │   ├── domain-error.ts
+│   │   ├── domain-event.ts
+│   │   ├── concurrency-error.ts
+│   │   └── forbidden-error.ts
+│   ├── user/                                ← Bounded context #1
+│   │   ├── user.ts                          (rich entity, create + reconstruct)
+│   │   ├── user-id.ts, user-name.ts, email.ts
+│   │   ├── errors.ts
+│   │   └── events/                          (UserRegistered, UserRenamed, …)
+│   └── order/                               ← Bounded context #2
+│       ├── order.ts                         (aggregate root, version, events)
+│       ├── line-item.ts                     (inner entity)
+│       ├── order-id.ts, customer-id.ts (branded), money.ts, quantity.ts, sku.ts
+│       ├── order-status.ts                  (discriminated union)
+│       ├── errors.ts
+│       ├── events/                          (OrderPlaced, OrderCancelled, …)
+│       ├── services/pricing.ts              (domain service)
+│       └── specifications/expensive-order-spec.ts
+├── application/                             ← Use-case orchestration
+│   ├── dtos/                                (UserDto, OrderDto, CustomerSummaryDto, …)
+│   ├── mappers/                             (entity ↔ DTO)
 │   ├── ports/
-│   │   ├── input/      · use-case interfaces (driving side)
-│   │   └── output/     · repository / clock / id-generator (driven side)
-│   └── use-cases/      · CreateUser, GetUser, ListUsers
-├── infrastructure/ ← Adapters that implement output ports
-│   ├── clock/          · SystemClock
-│   ├── id/             · CryptoIdGenerator
-│   └── persistence/    · InMemoryUserRepository, JsonFileUserRepository
-├── presentation/   ← Delivery mechanisms (drive the input ports)
-│   ├── cli/            · argv dispatcher + commands
-│   └── http/           · Hono server + routes
-├── index.ts        ← CLI composition root
-└── server.ts       ← HTTP composition root
+│   │   ├── input/                           (driving ports — one per use case)
+│   │   └── output/                          (driven ports — Logger, Metrics, Tracer,
+│   │                                         EventPublisher, IdempotencyStore, Cache,
+│   │                                         RateLimiter, AuditLog, FeatureFlags,
+│   │                                         UnitOfWork, repositories, read models,
+│   │                                         CustomerLookup, PlaceOrderOutput, …)
+│   ├── use-cases/                           (CreateUser, PlaceOrder, … + 8 decorators)
+│   ├── factories/order-factory.ts           (application factory)
+│   ├── sagas/order-confirmation-saga.ts
+│   └── security/principal.ts
+├── infrastructure/                          ← Adapters (one folder per concern)
+│   ├── audit/, cache/, clock/, customer/, feature-flags/, id/, logging/,
+│   ├── messaging/, metrics/, persistence/, rate-limiter/, tracing/, transaction/
+│   └── (every output port has an in-memory adapter; persistence has JSON-file too)
+├── presentation/                            ← Delivery mechanisms (driving adapters)
+│   ├── cli/                                 (commands/ + dispatcher)
+│   ├── http/                                (Hono routes/ + server)
+│   └── queue/                               (stdin JSONL worker + handlers)
+├── composition.ts                           ← Shared compose() — only consumed by:
+├── index.ts                                 ← CLI composition root
+├── server.ts                                ← HTTP composition root
+└── worker.ts                                ← Queue composition root
+
+tests/
+├── architecture/                            ← Fitness function tests
+├── domain/, application/, infrastructure/, presentation/
+├── support/fakes.ts                         (FixedClock, SequentialIdGenerator, …)
+├── user/builders/user-builder.ts            (Test Data Builders)
+└── order/builders/order-builder.ts
+
+docs/
+├── adr/0001..0003-*.md                      (Architecture Decision Records)
+└── context-map.md                           (Bounded-context relationships)
 ```
-
-### Dependency direction
-
-```mermaid
-flowchart LR
-    subgraph Outer["🟥 Outer / volatile"]
-        direction TB
-        Pres["Presentation<br/>CLI · HTTP"]
-        Infra["Infrastructure<br/>JsonFile repo · SystemClock · CryptoIds"]
-    end
-    subgraph Inner["🟩 Inner / stable"]
-        direction TB
-        App["Application<br/>use cases · ports · DTOs · mappers"]
-        Dom["Domain<br/>entities · value objects · domain errors"]
-    end
-    Pres -->|calls input ports of| App
-    Infra -.->|implements output ports of| App
-    App -->|depends on| Dom
-
-    classDef outer fill:#fef2f2,stroke:#b91c1c,color:#7f1d1d
-    classDef inner fill:#ecfdf5,stroke:#047857,color:#064e3b
-    class Pres,Infra outer
-    class App,Dom inner
-```
-
-**Rule:** source-code dependencies always point inward. Inner layers know nothing about outer layers — they expose **ports** (interfaces) and outer layers **implement** them.
 
 ---
-
-## 🔌 Ports & Adapters for the User slice
-
-```mermaid
-flowchart LR
-    CLI["CLI command"]:::pres -->|"depends on"| InCreate["CreateUserUseCase<br/>(input port)"]:::port
-    HTTP["Hono route<br/>POST /users"]:::pres -->|"depends on"| InCreate
-    InCreate -.->|implemented by| UC["CreateUser<br/>(use case)"]:::uc
-    UC -->|uses| OutRepo["UserRepository<br/>(output port)"]:::port
-    UC -->|uses| OutClock["Clock<br/>(output port)"]:::port
-    UC -->|uses| OutIds["IdGenerator<br/>(output port)"]:::port
-    OutRepo -.->|implemented by| InMem["InMemoryUserRepository"]:::adapter
-    OutRepo -.->|implemented by| Json["JsonFileUserRepository"]:::adapter
-    OutClock -.->|implemented by| Sys["SystemClock"]:::adapter
-    OutIds -.->|implemented by| Crypto["CryptoIdGenerator"]:::adapter
-
-    classDef pres fill:#eff6ff,stroke:#1d4ed8,color:#1e3a8a
-    classDef port fill:#fefce8,stroke:#a16207,color:#713f12
-    classDef uc fill:#ecfdf5,stroke:#047857,color:#064e3b
-    classDef adapter fill:#fef2f2,stroke:#b91c1c,color:#7f1d1d
-```
-
-The use case sits **inside** the application layer. It only sees the ports — the dotted lines show implementations swapped in at the composition root. That's why the same `CreateUser` works under CLI or HTTP, against an in-memory store or a JSON file, with no code changes.
-
----
-
-## ⚡ Request flow: `POST /users`
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client
-    participant Route as Hono route<br/>(presentation)
-    participant UC as CreateUser<br/>(use case)
-    participant Email as Email value object<br/>(domain)
-    participant Repo as JsonFileUserRepository<br/>(adapter)
-    participant Map as userMapper
-
-    Client->>Route: POST /users { name, email }
-    Route->>UC: execute({ name, email })
-    UC->>Email: Email.create(email)
-    alt Invalid email
-        Email-->>UC: throw InvalidEmailError
-        UC-->>Route: ↑ DomainError(code=INVALID_EMAIL)
-        Route-->>Client: 400 { error, message }
-    else Valid
-        Email-->>UC: Email
-        UC->>Repo: findByEmail(email)
-        Repo-->>UC: undefined
-        UC->>Repo: save(newUser)
-        UC->>Map: toDto(user)
-        Map-->>UC: UserDto
-        UC-->>Route: UserDto
-        Route-->>Client: 201 UserDto
-    end
-```
-
-Notice that `Route` only ever speaks to `UC` via its input port and to `Client` via DTOs / `DomainError.code`. The route knows nothing about `JsonFileUserRepository`, `Email`, or `User`.
-
----
-
-## ✨ What's included
-
-- ⚡ TypeScript + Node.js ESM
-- 🧪 Vitest for fast, native ESM testing (29 tests across all layers)
-- 🧹 XO + Prettier (config tuned for ESM CLI/server entry points)
-- 🪝 Husky + lint-staged pre-commit
-- 🪪 `node:util.parseArgs` CLI dispatcher (zero deps)
-- 🌐 [Hono](https://hono.dev) + `@hono/node-server` HTTP delivery
-- 🧭 Layer-scoped import aliases (`#domain/*`, `#application/*`, `#infrastructure/*`, `#presentation/*`)
-
----
-
-## 📋 Requirements
-
-- Node.js 18+
-
-## 🛠️ Setup
-
-```bash
-npm install
-cp .env.example .env   # optional: tweak local config
-```
 
 ## ⚙️ Configuration
 
-All env vars are read in **one place**, `src/config.ts` (the only module allowed to touch `process.env`). Both composition roots call `loadConfig()` and pass the result inward — no other layer reads env vars.
+All env vars are read in **one place**: `src/config.ts`. Composition roots call `loadConfig()` and pass the result inward.
 
-| Variable          | Default              | Notes                                                     |
-| ----------------- | -------------------- | --------------------------------------------------------- |
-| `USERS_DATA_FILE` | `./.data/users.json` | Path used by `JsonFileUserRepository`.                    |
-| `PORT`            | `3000`               | HTTP server port. Validated to be an integer in 1..65535. |
-| `NODE_ENV`        | `development`        | One of `development` \| `production` \| `test`.           |
+| Variable                | Default               | Notes                                                     |
+| ----------------------- | --------------------- | --------------------------------------------------------- |
+| `USERS_DATA_FILE`       | `./.data/users.json`  | Path used by `JsonFileUserRepository`.                    |
+| `ORDERS_DATA_FILE`      | `./.data/orders.json` | Path used by `JsonFileOrderRepository`.                   |
+| `PORT`                  | `3000`                | HTTP server port. Validated to be an integer in 1..65535. |
+| `NODE_ENV`              | `development`         | One of `development` \| `production` \| `test`.           |
+| `RATE_LIMIT_PER_MINUTE` | `60`                  | Per-key fixed-window limit for `RateLimitedCreateUser`.   |
+| `ENABLED_FEATURES`      | _(empty)_             | Comma-separated. Recognized: `cache-users`.               |
 
-**Local development:** copy `.env.example` to `.env`. `dotenv` is a **devDependency** that loads `.env` only when `NODE_ENV !== "production"` — see `src/config.ts`.
-
-**Production:** inject env vars via your runtime (Docker, systemd, Kubernetes, fly.io, …). `dotenv` is not required and will not be loaded.
+---
 
 ## ▶️ Scripts
 
-| Script           | What it does                                  |
-| ---------------- | --------------------------------------------- |
-| `npm start`      | Run the CLI composition root (`src/index.ts`) |
-| `npm run serve`  | Run the HTTP composition root on port 3000    |
-| `npm test`       | Run Vitest tests                              |
-| `npm run lint`   | Lint with XO (autofix)                        |
-| `npm run format` | Format with Prettier                          |
+| Script           | What it does                                                            |
+| ---------------- | ----------------------------------------------------------------------- |
+| `npm start`      | Run the CLI composition root (`src/index.ts`)                           |
+| `npm run serve`  | Run the HTTP composition root on `PORT`                                 |
+| `npm run worker` | Run the queue worker (reads JSONL from stdin)                           |
+| `npm test`       | Run Vitest (domain + application + infra + presentation + architecture) |
+| `npm run lint`   | Lint with XO (autofix)                                                  |
+| `npm run format` | Format with Prettier                                                    |
 
 ---
 
 ## 💻 CLI usage
 
-Persistence defaults to `./.data/users.json`. Override with `USERS_DATA_FILE=/path/to/users.json` (env var or `.env`).
-
 ```bash
 npm start -- create-user --name "Alice" --email "alice@example.com"
 npm start -- list-users
 npm start -- get-user <id>
-npm start -- help
+npm start -- rename-user --id <id> --name "Alicia"
+npm start -- deactivate-user --id <id> --reason "spam"
+
+npm start -- place-order \
+  --customer-id <user-id> \
+  --idempotency-key <key> \
+  --item BOOK-1:2:9.99:USD \
+  --item BOOK-2:1:14.50:USD
+
+npm start -- list-orders --customer-id <user-id> --limit 20
+npm start -- get-order <id>
+npm start -- cancel-order --id <order-id> --customer-id <user-id> --reason "changed mind"
 ```
 
-> The `--` separates npm's args from the CLI's args. With `tsx` directly: `tsx src/index.ts list-users`.
+Domain errors map to non-zero exit codes; the centralized error mapping table lives in `src/presentation/cli/cli.ts` (CLI) and `src/presentation/http/server.ts` (HTTP).
 
-Domain errors map to non-zero exit codes:
-
-```bash
-$ npm start -- get-user does-not-exist
-Error [USER_NOT_FOUND]: User not found: does-not-exist
-$ echo $?
-1
-```
+---
 
 ## 🌐 HTTP usage
 
@@ -225,78 +155,61 @@ npm run serve
 # HTTP server listening on http://localhost:3000
 ```
 
-| Method | Path         | Body                  | Success         | Errors                                                             |
-| ------ | ------------ | --------------------- | --------------- | ------------------------------------------------------------------ |
-| POST   | `/users`     | `{ "name", "email" }` | `201 UserDto`   | `400 INVALID_EMAIL`, `409 EMAIL_ALREADY_EXISTS`, `400 BAD_REQUEST` |
-| GET    | `/users`     | —                     | `200 UserDto[]` | —                                                                  |
-| GET    | `/users/:id` | —                     | `200 UserDto`   | `404 USER_NOT_FOUND`                                               |
+| Method | Path                 | Body                                                 | Success         | Notable errors                                                     |
+| ------ | -------------------- | ---------------------------------------------------- | --------------- | ------------------------------------------------------------------ |
+| POST   | `/users`             | `{ name, email }`                                    | `201 UserDto`   | `400 INVALID_EMAIL`, `409 EMAIL_ALREADY_EXISTS`                    |
+| GET    | `/users`             | —                                                    | `200 UserDto[]` | —                                                                  |
+| GET    | `/users/:id`         | —                                                    | `200 UserDto`   | `404 USER_NOT_FOUND`                                               |
+| POST   | `/orders`            | `{ customerId, items[] }` + `Idempotency-Key` header | `201 OrderDto`  | `403 FORBIDDEN`, `404 CUSTOMER_NOT_FOUND`, `409 CUSTOMER_INACTIVE` |
+| GET    | `/orders`            | `?customerId&cursor&limit`                           | `200 OrderPage` | —                                                                  |
+| GET    | `/orders/:id`        | —                                                    | `200 OrderDto`  | `404 ORDER_NOT_FOUND`                                              |
+| POST   | `/orders/:id/cancel` | `{ reason }`                                         | `200 OrderDto`  | `403 FORBIDDEN`, `409 ORDER_ALREADY_CANCELLED`                     |
+
+Authentication: HTTP routes read `X-Principal-Id` and `X-Principal-Roles` headers (dev-mode trust; replace with a real auth adapter for production — §6.4).
+
+---
+
+## 📨 Queue worker
+
+The third delivery mechanism reads JSONL messages from stdin and dispatches them to use cases:
 
 ```bash
-curl -X POST http://localhost:3000/users \
-  -H "content-type: application/json" \
-  -d '{"name":"Alice","email":"alice@example.com"}'
-# → 201 {"id":"…","name":"Alice","email":"alice@example.com","createdAt":"…"}
-
-curl http://localhost:3000/users
-# → 200 [{...}]
+echo '{"kind":"place-order","input":{
+  "principal":{"id":"<user-id>","roles":["customer"]},
+  "customerId":"<user-id>",
+  "items":[{"sku":"BOOK-1","quantity":1,"unitPrice":9.99,"currency":"USD"}],
+  "idempotencyKey":"queue-1"
+}}' | npm run worker
 ```
 
-Status mapping is centralized in `src/presentation/http/server.ts` — extend the `statusByCode` map when you add new domain error codes.
+Adding a fourth delivery mechanism (gRPC, WebSocket, scheduled batch, …) means a new folder under `src/presentation/<name>/` and a new composition root at `src/<name>.ts`. No change in `application/` or `domain/`.
 
 ---
 
-## 🧭 Path aliases
+## 🧪 Testing
 
-| Alias               | Maps to                |
-| ------------------- | ---------------------- |
-| `#domain/*`         | `src/domain/*`         |
-| `#application/*`    | `src/application/*`    |
-| `#infrastructure/*` | `src/infrastructure/*` |
-| `#presentation/*`   | `src/presentation/*`   |
-| `#src/*`            | `src/*`                |
+Tests live under `tests/` mirroring `src/`. The breakdown:
 
-Use `.js` import specifiers in TypeScript source (Node ESM resolution). Example:
+| Layer / kind   | What's tested                                                                                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Domain         | VO validation + invariants, entity behavior, aggregates, services, specs, property-based tests on `Money`                                                                        |
+| Application    | Use cases through input ports with in-memory adapters; decorator behavior; saga subscription                                                                                     |
+| Infrastructure | Contract tests (`runUserRepositoryContract`, `runOrderRepositoryContract`) — every adapter passes the same suite, including the `JsonFileXxxRepository` against a real tmp file  |
+| Presentation   | CLI commands and HTTP routes driven through fake input ports; queue worker through stdin                                                                                         |
+| Architecture   | Dependency rule, no cross-context imports, composition-root-only access to `composition.ts` and `new <ConcreteAdapter>(...)`, no barrel files, `process.env` only in `config.ts` |
 
-```ts
-import { CreateUser } from "#application/use-cases/create-user.js";
-```
+Run all of it: `npm test -- --run`.
 
 ---
 
-## 🧪 Testing strategy
+## 📂 Documentation
 
-| Layer          | What to test                                                | How                                                                        |
-| -------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Domain         | Value-object validation, entity invariants, error semantics | Pure unit tests; no doubles                                                |
-| Application    | Use-case orchestration                                      | Drive via input port; in-memory repo + hand-rolled `Clock` / `IdGenerator` |
-| Infrastructure | Adapter behavior                                            | Integration test against the real fs / DB                                  |
-| Adapters (≥2)  | Behavioral equivalence across implementations of one port   | Shared **contract test** (`AGENTS.md` §10.3) called by each adapter's spec |
-| Presentation   | Routing, status mapping, arg parsing                        | Stub the input ports with fake use cases                                   |
-
-Construct fixtures via **test data builders** (`aUser().withEmail("…").build()`) under `tests/<context>/builders/` so invariant changes ripple through one builder, not fifty tests (`AGENTS.md` §10.2).
-
-Tests live mirroring `src/`:
-
-```
-tests/
-├── domain/
-│   └── email.test.ts
-├── application/
-│   ├── create-user.test.ts
-│   ├── get-user.test.ts
-│   └── list-users.test.ts
-└── presentation/
-    ├── cli/
-    │   ├── cli.test.ts
-    │   └── commands/
-    │       ├── create-user.test.ts
-    │       ├── get-user.test.ts
-    │       └── list-users.test.ts
-    └── http/
-        └── server.test.ts
-```
-
-Presentation tests use `app.request(...)` (Hono) and `console.*` spies (CLI) to drive routes / commands through fake input ports — proving the input-port abstraction holds without booting a server or shelling out.
+- [`AGENTS.md`](./AGENTS.md) — the binding architecture contract.
+- [`docs/context-map.md`](./docs/context-map.md) — bounded-context relationships and integration patterns.
+- [`docs/adr/`](./docs/adr/) — Architecture Decision Records.
+  - `0001-clean-architecture-baseline.md`
+  - `0002-add-order-context.md`
+  - `0003-shared-composition-module.md`
 
 ---
 
@@ -304,8 +217,7 @@ Presentation tests use `app.request(...)` (Hono) and `console.*` spies (CLI) to 
 
 1. Click **Use this template** on GitHub (or `git clone` and re-init).
 2. Update `name`, `description`, and repo URLs in `package.json`.
-3. Replace the `User` slice with your own bounded context (see `AGENTS.md` §4 for recipes).
-4. Add infrastructure adapters as needed — Postgres, Redis, S3, message brokers all become new files in `src/infrastructure/`.
-5. Add or replace a delivery mechanism — gRPC, WebSocket, queue worker — as a new folder in `src/presentation/` and a new composition root at `src/<name>.ts`.
-
-For the full set of rules each contributor (human or AI) must follow, see [`AGENTS.md`](./AGENTS.md).
+3. Decide what to keep:
+   - Keep the User context as the auth/identity surface; replace Order with your own primary aggregate.
+   - Or strip both and use the patterns (decorators, saga, ACL, queue worker, contract tests, arch tests) as a scaffolding kit.
+4. Read [`AGENTS.md`](./AGENTS.md) §8 for the recipes (add a use case, add an aggregate, add an adapter, add a delivery mechanism, …).

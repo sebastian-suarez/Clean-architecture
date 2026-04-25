@@ -31,7 +31,8 @@
 		"#domain/*": "./src/domain/*",
 		"#application/*": "./src/application/*",
 		"#infrastructure/*": "./src/infrastructure/*",
-		"#presentation/*": "./src/presentation/*"
+		"#presentation/*": "./src/presentation/*",
+		"#tests/*": "./tests/*"
 	},
 	"engines": {
 		"node": ">=18"
@@ -39,6 +40,7 @@
 	"scripts": {
 		"start": "tsx ./src/index.ts",
 		"serve": "tsx ./src/server.ts",
+		"worker": "tsx ./src/worker.ts",
 		"test": "vitest",
 		"lint": "xo --fix",
 		"format": "prettier --write .",

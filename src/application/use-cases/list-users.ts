@@ -6,7 +6,7 @@ import { type UserRepository } from "#application/ports/output/user-repository.j
 export class ListUsers implements ListUsersUseCase {
 	constructor(private readonly users: UserRepository) {}
 
-	async execute(): Promise<UserDto[]> {
+	async execute(): Promise<readonly UserDto[]> {
 		const users = await this.users.findAll();
 		return users.map((user) => userMapper.toDto(user));
 	}

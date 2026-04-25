@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { type UserDto } from "#application/dtos/user-dto.js";
 import {
 	EmailAlreadyExistsError,
 	InvalidEmailError,
@@ -6,11 +7,13 @@ import {
 } from "#domain/user/errors.js";
 import { createServer, type HttpDeps } from "#presentation/http/server.js";
 
-const sampleDto = {
+const sampleDto: UserDto = {
 	id: "u-1",
 	name: "Alice",
 	email: "alice@example.com",
+	status: "active",
 	createdAt: "2026-01-01T00:00:00.000Z",
+	version: 0,
 };
 
 function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
@@ -28,6 +31,22 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
 		listUsers: {
 			async execute() {
 				return [sampleDto];
+			},
+		},
+		placeOrder: { async execute() {} },
+		cancelOrder: {
+			async execute() {
+				throw new Error("not implemented in fake");
+			},
+		},
+		getOrder: {
+			async execute() {
+				throw new Error("not implemented in fake");
+			},
+		},
+		listOrders: {
+			async execute() {
+				return { items: [], nextCursor: undefined };
 			},
 		},
 		...overrides,

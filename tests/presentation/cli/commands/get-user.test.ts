@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type UserDto } from "#application/dtos/user-dto.js";
 import { getUserCommand } from "#presentation/cli/commands/get-user.js";
 
-const sampleDto = {
+const sampleDto: UserDto = {
 	id: "u-1",
 	name: "Alice",
 	email: "alice@example.com",
+	status: "active",
 	createdAt: "2026-01-01T00:00:00.000Z",
+	version: 0,
 };
 
 describe("getUserCommand", () => {

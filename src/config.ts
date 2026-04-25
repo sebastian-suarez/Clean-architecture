@@ -12,17 +12,25 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export type AppConfig = {
-	dataFile: string;
-	port: number;
-	nodeEnv: "development" | "production" | "test";
+	readonly usersDataFile: string;
+	readonly ordersDataFile: string;
+	readonly port: number;
+	readonly nodeEnv: "development" | "production" | "test";
+	readonly rateLimitPerMinute: number;
+	readonly enabledFeatures: ReadonlySet<string>;
 };
 
 export function loadConfig(): AppConfig {
+	const { env } = process;
 	return Object.freeze({
-		dataFile:
-			process.env.USERS_DATA_FILE ?? resolve(process.cwd(), ".data/users.json"),
-		port: parsePort(process.env.PORT, 3000),
-		nodeEnv: parseNodeEnv(process.env.NODE_ENV),
+		usersDataFile:
+			env.USERS_DATA_FILE ?? resolve(process.cwd(), ".data/users.json"),
+		ordersDataFile:
+			env.ORDERS_DATA_FILE ?? resolve(process.cwd(), ".data/orders.json"),
+		port: parsePort(env.PORT, 3000),
+		nodeEnv: parseNodeEnv(env.NODE_ENV),
+		rateLimitPerMinute: parsePositiveInt(env.RATE_LIMIT_PER_MINUTE, 60),
+		enabledFeatures: parseFlags(env.ENABLED_FEATURES),
 	});
 }
 
@@ -39,4 +47,24 @@ function parsePort(raw: string | undefined, fallback: number): number {
 function parseNodeEnv(raw: string | undefined): AppConfig["nodeEnv"] {
 	if (raw === "production" || raw === "test") return raw;
 	return "development";
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+	if (!raw) return fallback;
+	const parsed = Number(raw);
+	if (!Number.isInteger(parsed) || parsed < 1) {
+		throw new Error(`Expected positive integer, got: ${raw}`);
+	}
+
+	return parsed;
+}
+
+function parseFlags(raw: string | undefined): ReadonlySet<string> {
+	if (!raw) return new Set();
+	return new Set(
+		raw
+			.split(",")
+			.map((flag) => flag.trim())
+			.filter((flag) => flag.length > 0),
+	);
 }

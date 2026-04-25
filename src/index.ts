@@ -1,23 +1,21 @@
 import process from "node:process";
-import { CreateUser } from "#application/use-cases/create-user.js";
-import { GetUser } from "#application/use-cases/get-user.js";
-import { ListUsers } from "#application/use-cases/list-users.js";
-import { SystemClock } from "#infrastructure/clock/system-clock.js";
-import { CryptoIdGenerator } from "#infrastructure/id/crypto-id-generator.js";
-import { JsonFileUserRepository } from "#infrastructure/persistence/json-file-user-repository.js";
 import { runCli } from "#presentation/cli/cli.js";
+import { compose } from "#src/composition.js";
 import { loadConfig } from "#src/config.js";
 
 const config = loadConfig();
-
-const users = new JsonFileUserRepository(config.dataFile);
-const ids = new CryptoIdGenerator();
-const clock = new SystemClock();
+const composed = compose(config);
 
 const exitCode = await runCli(process.argv.slice(2), {
-	createUser: new CreateUser(users, ids, clock),
-	getUser: new GetUser(users),
-	listUsers: new ListUsers(users),
+	createUser: composed.createUser,
+	getUser: composed.getUser,
+	listUsers: composed.listUsers,
+	renameUser: composed.renameUser,
+	deactivateUser: composed.deactivateUser,
+	placeOrder: composed.placeOrder,
+	cancelOrder: composed.cancelOrder,
+	getOrder: composed.getOrder,
+	listOrders: composed.listOrders,
 });
 
 process.exit(exitCode);

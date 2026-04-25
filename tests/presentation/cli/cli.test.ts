@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { type UserDto } from "#application/dtos/user-dto.js";
 import { UserNotFoundError } from "#domain/user/errors.js";
 import { type CliDeps, runCli } from "#presentation/cli/cli.js";
 
-const sampleDto = {
+const sampleDto: UserDto = {
 	id: "u-1",
 	name: "A",
 	email: "a@b.co",
+	status: "active",
 	createdAt: "2026-01-01T00:00:00.000Z",
+	version: 0,
 };
 
 function makeDeps(overrides: Partial<CliDeps> = {}): CliDeps {
@@ -24,6 +27,32 @@ function makeDeps(overrides: Partial<CliDeps> = {}): CliDeps {
 		listUsers: {
 			async execute() {
 				return [];
+			},
+		},
+		renameUser: {
+			async execute() {
+				return sampleDto;
+			},
+		},
+		deactivateUser: {
+			async execute() {
+				return sampleDto;
+			},
+		},
+		placeOrder: { async execute() {} },
+		cancelOrder: {
+			async execute() {
+				throw new Error("not implemented in fake");
+			},
+		},
+		getOrder: {
+			async execute() {
+				throw new Error("not implemented in fake");
+			},
+		},
+		listOrders: {
+			async execute() {
+				return { items: [], nextCursor: undefined };
 			},
 		},
 		...overrides,
@@ -49,6 +78,7 @@ describe("runCli", () => {
 		const printed = JSON.stringify(log.mock.calls);
 		expect(printed).toContain("Commands:");
 		expect(printed).toContain("create-user");
+		expect(printed).toContain("place-order");
 	});
 
 	it("returns 1 and prints help for unknown command", async () => {

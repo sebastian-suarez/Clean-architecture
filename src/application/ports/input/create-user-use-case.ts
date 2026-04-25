@@ -1,8 +1,8 @@
 import { type UserDto } from "#application/dtos/user-dto.js";
 
 export type CreateUserInput = {
-	name: string;
-	email: string;
+	readonly name: string;
+	readonly email: string;
 };
 
 export type CreateUserUseCase = {

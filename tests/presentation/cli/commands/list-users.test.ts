@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { type UserDto } from "#application/dtos/user-dto.js";
 import { listUsersCommand } from "#presentation/cli/commands/list-users.js";
+
+const sample: UserDto = {
+	id: "1",
+	name: "A",
+	email: "a@b.co",
+	status: "active",
+	createdAt: "2026-01-01T00:00:00.000Z",
+	version: 0,
+};
 
 describe("listUsersCommand", () => {
 	afterEach(() => {
@@ -24,10 +34,7 @@ describe("listUsersCommand", () => {
 		await listUsersCommand([], {
 			listUsers: {
 				async execute() {
-					return [
-						{ id: "1", name: "A", email: "a@b.co", createdAt: "x" },
-						{ id: "2", name: "B", email: "b@c.co", createdAt: "x" },
-					];
+					return [sample, { ...sample, id: "2", name: "B", email: "b@c.co" }];
 				},
 			},
 		});

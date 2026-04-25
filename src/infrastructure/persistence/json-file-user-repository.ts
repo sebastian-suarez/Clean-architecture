@@ -1,7 +1,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { type UserRepository } from "#application/ports/output/user-repository.js";
+import { ConcurrencyError } from "#domain/shared/concurrency-error.js";
 import { type Email } from "#domain/user/email.js";
+import { type UserId } from "#domain/user/user-id.js";
 import { type User } from "#domain/user/user.js";
 import {
 	type UserRecord,
@@ -11,9 +13,9 @@ import {
 export class JsonFileUserRepository implements UserRepository {
 	constructor(private readonly filePath: string) {}
 
-	async findById(id: string): Promise<User | undefined> {
+	async findById(id: UserId): Promise<User | undefined> {
 		const users = await this.readAll();
-		return users.find((user) => user.id === id);
+		return users.find((user) => user.id.equals(id));
 	}
 
 	async findByEmail(email: Email): Promise<User | undefined> {
@@ -21,20 +23,33 @@ export class JsonFileUserRepository implements UserRepository {
 		return users.find((user) => user.email.equals(email));
 	}
 
-	async findAll(): Promise<User[]> {
+	async findAll(): Promise<readonly User[]> {
 		return this.readAll();
 	}
 
 	async save(user: User): Promise<void> {
 		const users = await this.readAll();
-		const index = users.findIndex((existing) => existing.id === user.id);
-		if (index === -1) {
-			users.push(user);
-		} else {
-			users[index] = user;
+		const index = users.findIndex((existing) => existing.id.equals(user.id));
+
+		if (index !== -1 && users[index].version !== user.version) {
+			throw new ConcurrencyError(
+				user.id.value,
+				user.version,
+				users[index].version,
+			);
 		}
 
-		await this.writeAll(users);
+		const recordToWrite = userRecordMapper.toRecord(user);
+		recordToWrite.version = user.version + 1;
+
+		const records = users.map((u) => userRecordMapper.toRecord(u));
+		if (index === -1) {
+			records.push(recordToWrite);
+		} else {
+			records[index] = recordToWrite;
+		}
+
+		await this.writeRecords(records);
 	}
 
 	private async readAll(): Promise<User[]> {
@@ -51,9 +66,8 @@ export class JsonFileUserRepository implements UserRepository {
 		}
 	}
 
-	private async writeAll(users: User[]): Promise<void> {
+	private async writeRecords(records: UserRecord[]): Promise<void> {
 		await mkdir(dirname(this.filePath), { recursive: true });
-		const records = users.map((user) => userRecordMapper.toRecord(user));
 		await writeFile(this.filePath, JSON.stringify(records, null, 2), "utf8");
 	}
 }
