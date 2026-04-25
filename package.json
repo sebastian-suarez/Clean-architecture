@@ -1,0 +1,49 @@
+{
+	"name": "typescript-template",
+	"version": "2.0.0",
+	"description": "TypeScript template for Node.js with ESM, Vitest, XO, and Prettier.",
+	"keywords": [
+		"TypeScript",
+		"template",
+		"Node.js",
+		"ESM",
+		"Vitest",
+		"XO",
+		"Prettier"
+	],
+	"homepage": "https://github.com/sebastian-suarez/TypeScript-template#readme",
+	"bugs": {
+		"url": "https://github.com/sebastian-suarez/TypeScript-template/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/sebastian-suarez/TypeScript-template.git"
+	},
+	"license": "MIT",
+	"author": "Sebastian Suarez <261091557+sebastian-suarez@users.noreply.github.com> (https://www.sebastiansuarez.dev)",
+	"type": "module",
+	"imports": {
+		"#src/*": "./src/*"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"scripts": {
+		"start": "tsx ./src/index.js",
+		"test": "vitest",
+		"lint": "xo --fix",
+		"format": "prettier --write .",
+		"prepare": "husky"
+	},
+	"devDependencies": {
+		"@tsconfig/node24": "^24.0.4",
+		"@types/node": "^25.6.0",
+		"husky": "^9.1.7",
+		"lint-staged": "^16.2.7",
+		"prettier": "3.8.1",
+		"tsx": "^4.21.0",
+		"typescript": "^5.9.3",
+		"vitest": "^4.1.4",
+		"xo": "^1.2.3"
+	}
+}
