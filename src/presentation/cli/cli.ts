@@ -3,6 +3,7 @@ import { type CreateUserUseCase } from "#application/ports/input/create-user-use
 import { type DeactivateUserUseCase } from "#application/ports/input/deactivate-user-use-case.js";
 import { type GetOrderUseCase } from "#application/ports/input/get-order-use-case.js";
 import { type GetUserUseCase } from "#application/ports/input/get-user-use-case.js";
+import { type ListOrderSummariesUseCase } from "#application/ports/input/list-order-summaries-use-case.js";
 import { type ListOrdersUseCase } from "#application/ports/input/list-orders-use-case.js";
 import { type ListUsersUseCase } from "#application/ports/input/list-users-use-case.js";
 import { type PlaceOrderUseCase } from "#application/ports/input/place-order-use-case.js";
@@ -13,6 +14,7 @@ import { createUserCommand } from "#presentation/cli/commands/create-user.js";
 import { deactivateUserCommand } from "#presentation/cli/commands/deactivate-user.js";
 import { getOrderCommand } from "#presentation/cli/commands/get-order.js";
 import { getUserCommand } from "#presentation/cli/commands/get-user.js";
+import { listOrderSummariesCommand } from "#presentation/cli/commands/list-order-summaries.js";
 import { listOrdersCommand } from "#presentation/cli/commands/list-orders.js";
 import { listUsersCommand } from "#presentation/cli/commands/list-users.js";
 import { placeOrderCommand } from "#presentation/cli/commands/place-order.js";
@@ -28,6 +30,7 @@ export type CliDeps = {
 	cancelOrder: CancelOrderUseCase;
 	getOrder: GetOrderUseCase;
 	listOrders: ListOrdersUseCase;
+	listOrderSummaries: ListOrderSummariesUseCase;
 };
 
 type CommandHandler = (args: string[], deps: CliDeps) => Promise<void>;
@@ -101,6 +104,14 @@ const commands = new Map<string, CommandEntry>([
 			describe:
 				"List orders for a customer. Flags: --customer-id, --cursor, --limit",
 			handler: listOrdersCommand,
+		},
+	],
+	[
+		"list-order-summaries",
+		{
+			describe:
+				"List CQRS order summaries for a customer (read-model projection). Flags: --customer-id, --cursor, --limit",
+			handler: listOrderSummariesCommand,
 		},
 	],
 ]);

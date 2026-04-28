@@ -5,22 +5,27 @@ import { type CreateUserUseCase } from "#application/ports/input/create-user-use
 import { type DeactivateUserUseCase } from "#application/ports/input/deactivate-user-use-case.js";
 import { type GetOrderUseCase } from "#application/ports/input/get-order-use-case.js";
 import { type GetUserUseCase } from "#application/ports/input/get-user-use-case.js";
+import { type ListOrderSummariesUseCase } from "#application/ports/input/list-order-summaries-use-case.js";
 import { type ListOrdersUseCase } from "#application/ports/input/list-orders-use-case.js";
 import { type ListUsersUseCase } from "#application/ports/input/list-users-use-case.js";
 import { type PlaceOrderUseCase } from "#application/ports/input/place-order-use-case.js";
 import { type RenameUserUseCase } from "#application/ports/input/rename-user-use-case.js";
 import { type Logger } from "#application/ports/output/logger.js";
 import { type UserRepository } from "#application/ports/output/user-repository.js";
+import { OrderSummaryProjector } from "#application/projections/order-summary-projector.js";
 import { OrderConfirmationSaga } from "#application/sagas/order-confirmation-saga.js";
 import { AuditedPlaceOrder } from "#application/use-cases/audited-place-order.js";
 import { AuthorizedPlaceOrder } from "#application/use-cases/authorized-place-order.js";
 import { CachedGetUser } from "#application/use-cases/cached-get-user.js";
 import { CancelOrder } from "#application/use-cases/cancel-order.js";
+import { CompensateOrderConfirmation } from "#application/use-cases/compensate-order-confirmation.js";
+import { ConfirmOrder } from "#application/use-cases/confirm-order.js";
 import { CreateUser } from "#application/use-cases/create-user.js";
 import { DeactivateUser } from "#application/use-cases/deactivate-user.js";
 import { GetOrder } from "#application/use-cases/get-order.js";
 import { GetUser } from "#application/use-cases/get-user.js";
 import { IdempotentPlaceOrder } from "#application/use-cases/idempotent-place-order.js";
+import { ListOrderSummaries } from "#application/use-cases/list-order-summaries.js";
 import { ListOrders } from "#application/use-cases/list-orders.js";
 import { ListUsers } from "#application/use-cases/list-users.js";
 import { LoggedCreateUser } from "#application/use-cases/logged-create-user.js";
@@ -36,11 +41,14 @@ import { SystemClock } from "#infrastructure/clock/system-clock.js";
 import { InProcessCustomerLookup } from "#infrastructure/customer/in-process-customer-lookup.js";
 import { EnvFeatureFlags } from "#infrastructure/feature-flags/env-feature-flags.js";
 import { CryptoIdGenerator } from "#infrastructure/id/crypto-id-generator.js";
+import { InMemoryInventoryReservation } from "#infrastructure/inventory/in-memory-inventory-reservation.js";
 import { ConsoleLogger } from "#infrastructure/logging/console-logger.js";
 import { InMemoryEventPublisher } from "#infrastructure/messaging/in-memory-event-publisher.js";
 import { InMemoryMetrics } from "#infrastructure/metrics/in-memory-metrics.js";
 import { CachedUserRepository } from "#infrastructure/persistence/cached-user-repository.js";
 import { InMemoryIdempotencyStore } from "#infrastructure/persistence/in-memory-idempotency-store.js";
+import { InMemoryOrderProcessRepository } from "#infrastructure/persistence/in-memory-order-process-repository.js";
+import { InMemoryOrderSummaryReadModel } from "#infrastructure/persistence/in-memory-order-summary-read-model.js";
 import { JsonFileOrderRepository } from "#infrastructure/persistence/json-file-order-repository.js";
 import { JsonFileUserRepository } from "#infrastructure/persistence/json-file-user-repository.js";
 import { RetryingOrderRepository } from "#infrastructure/persistence/retrying-order-repository.js";
@@ -68,6 +76,7 @@ export type Composed = {
 	readonly cancelOrder: CancelOrderUseCase;
 	readonly getOrder: GetOrderUseCase;
 	readonly listOrders: ListOrdersUseCase;
+	readonly listOrderSummaries: ListOrderSummariesUseCase;
 };
 
 export function compose(config: AppConfig): Composed {
@@ -101,6 +110,19 @@ export function compose(config: AppConfig): Composed {
 	const customers = new InProcessCustomerLookup(userRepo);
 	const responseCache = new InMemoryCache<UserDto>();
 
+	// Saga state + workflow side-effects (§6.6).
+	const orderProcesses = new InMemoryOrderProcessRepository();
+	const inventory = new InMemoryInventoryReservation(ids, {
+		"BOOK-1": 100,
+		"BOOK-2": 100,
+		"WIDGET-1": 100,
+	});
+
+	// Read-side projection store (§4.1, full CQRS). Implements both the
+	// read port (consumed by `ListOrderSummaries`) and the writer port
+	// (consumed by `OrderSummaryProjector`).
+	const orderSummaries = new InMemoryOrderSummaryReadModel();
+
 	// --- Application factory ------------------------------------------------
 	const orderFactory = new OrderFactory(ids, clock);
 
@@ -121,6 +143,16 @@ export function compose(config: AppConfig): Composed {
 	const cancelOrder = new CancelOrder(orderRepo, clock, events);
 	const getOrder = new GetOrder(orderRepo);
 	const listOrders = new ListOrders(orderRepo);
+	const listOrderSummaries = new ListOrderSummaries(orderSummaries);
+
+	// Saga-only entry points — driven by `OrderConfirmationSaga`, never
+	// exposed at any presentation boundary.
+	const confirmOrder = new ConfirmOrder(orderRepo, clock, events);
+	const compensateOrder = new CompensateOrderConfirmation(
+		orderRepo,
+		clock,
+		events,
+	);
 
 	// --- Decorator stacks (order matters — §4.5) ---------------------------
 	// CreateUser: RateLimited → Metered → Logged → Traced → Inner
@@ -154,8 +186,19 @@ export function compose(config: AppConfig): Composed {
 	// HTTP further wraps with Authorized so anonymous principals fail fast.
 	const placeOrderForHttp = new AuthorizedPlaceOrder(placeOrderShared);
 
-	// --- Sagas --------------------------------------------------------------
-	new OrderConfirmationSaga(events, logger).start();
+	// --- Sagas + projections (subscribe before the system serves traffic) --
+	new OrderConfirmationSaga(
+		events,
+		orderRepo,
+		orderProcesses,
+		inventory,
+		confirmOrder,
+		compensateOrder,
+		clock,
+		ids,
+		logger,
+	).start();
+	new OrderSummaryProjector(events, orderSummaries, logger).start();
 
 	return {
 		logger,
@@ -169,5 +212,6 @@ export function compose(config: AppConfig): Composed {
 		cancelOrder,
 		getOrder,
 		listOrders,
+		listOrderSummaries,
 	};
 }

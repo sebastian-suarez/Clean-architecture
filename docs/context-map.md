@@ -46,6 +46,30 @@ None today. If Order ever needs to react to a User event (e.g., `UserDeactivated
 
 This is the preferred coupling for cross-context reactions (§6.5).
 
+## Within-Order event flow (saga + projection)
+
+All within the Order context. Wired in `src/composition.ts` once at boot.
+
+```
+                    OrderPlaced
+   ┌──────────────────────┴───────────────────────┐
+   ▼                                              ▼
+OrderConfirmationSaga                  OrderSummaryProjector
+(reserve inventory →                   (write `OrderSummary` row;
+ confirm order or                       `ListOrderSummaries` reads it)
+ compensate)
+   │
+   ▼ (drives)
+ConfirmOrder / CompensateOrderConfirmation
+   │
+   ▼ (publishes)
+OrderConfirmed / OrderCancelled  ──► OrderSummaryProjector again
+```
+
+- The saga's state lives in `OrderProcess` (`domain/order/order-process.ts`), persisted via `OrderProcessRepository`.
+- The projector's store is `InMemoryOrderSummaryReadModel`, exposing both `OrderSummaryReadModel` (for `ListOrderSummaries`) and `OrderSummaryProjection` (for the projector).
+- Both subscribers are idempotent (§4.4).
+
 ## Anti-patterns to flag in review
 
 - An `import` from `domain/order/` in any `domain/user/` file (or vice versa) — the architecture test `tests/architecture/no-cross-context-imports.arch.test.ts` will fail.

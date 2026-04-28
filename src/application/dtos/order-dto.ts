@@ -2,6 +2,11 @@ import { type LineItemDto } from "#application/dtos/line-item-dto.js";
 
 export type OrderStatusDto =
 	| { readonly kind: "placed" }
+	| {
+			readonly kind: "confirmed";
+			readonly reservationId: string;
+			readonly at: string;
+	  }
 	| { readonly kind: "shipped"; readonly at: string }
 	| {
 			readonly kind: "cancelled";

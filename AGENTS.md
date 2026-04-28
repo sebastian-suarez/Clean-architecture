@@ -331,7 +331,7 @@ If you need a new env var:
 
 ### 3.6 Domain events
 
-This template does not ship a domain-event mechanism. If you introduce one:
+The template ships a worked example. The Order aggregate buffers events in `src/domain/order/events/` (`OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `LineItemAdded`); use cases (`PlaceOrder`, `ConfirmOrder`, `CancelOrder`) dispatch them via the `EventPublisher` port (`src/application/ports/output/event-publisher.ts`) after `repository.save`. The `InMemoryEventPublisher` adapter delivers to in-process subscribers (the saga and the projector — §6.6, §4.1).
 
 - Events are **past-tense facts**: `OrderCancelled`, `UserRegistered`. Never `OrderCancelling` or `RegisterUser`.
 - Events live in `src/domain/<context>/events/<name>.ts` as plain immutable types — same rules as DTOs (primitives only, `readonly`, serializable).
@@ -385,7 +385,7 @@ Patterns to apply when refactoring the domain toward expressive, low-friction co
 - Use cases use **constructor injection** for all dependencies. No service-locator, no global registries, no `import` of concrete adapters.
 - Use cases are **stateless**: no instance fields except the injected ports.
 - **CQS, not full CQRS by default.** Queries and commands share the same domain model and repositories. If a query needs a denormalized projection that the aggregate cannot serve cheaply, define a separate **read-model port** (`UserReadModel`) returning a query DTO directly, instead of contorting the repository or the aggregate. This is the sanctioned step toward CQRS.
-- **Full CQRS** (separate write model, read model, and persistence stores; reads served from a projection updated by events) is out of scope by default. Adopt it when (a) read scale dwarfs write scale by an order of magnitude, (b) read shapes diverge meaningfully from the aggregate, or (c) you already have a reliable event stream. Don't adopt it for "future-proofing."
+- **Full CQRS** (separate write model, read model, and persistence stores; reads served from a projection updated by events) is shipped as a worked example for the Order context: `ListOrders` (CQS, aggregate-backed) and `ListOrderSummaries` (CQRS, projection-backed) sit side-by-side. The read side uses two narrow ports — `OrderSummaryReadModel` for queries (`src/application/ports/output/order-summary-read-model.ts`), `OrderSummaryProjection` for writes (`src/application/ports/output/order-summary-projection.ts`) — both implemented by `InMemoryOrderSummaryReadModel`. The projection is rebuilt by `OrderSummaryProjector` (`src/application/projections/order-summary-projector.ts`), which subscribes to the Order events. Adopt this style when (a) read scale dwarfs write scale by an order of magnitude, (b) read shapes diverge meaningfully from the aggregate, or (c) you already have a reliable event stream. Don't adopt it for "future-proofing."
 - **Event Sourcing** (storing events as the source of truth, deriving aggregate state by replay) is out of scope by default. It's a deep commitment — schema migration becomes event-version migration. If adopted, the aggregate replays events in `reconstruct(events: DomainEvent[])`; the repository is renamed to `EventStore`; snapshots become a performance concern.
 
 ### 4.2 Validation tiers
@@ -552,9 +552,13 @@ These DDD/CA-adjacent patterns are not used in this template. If you need one, f
 
 - **Specifications** — A `Specification<T>` is a reusable predicate object (`new ActiveUserSpec().and(new SignedUpAfterSpec(date))`). Useful when (a) the same predicate appears in multiple places, (b) predicates compose freely, (c) the persistence layer can translate the spec to a query. **Prefer adding a domain-named repository method (`findActiveBefore`)** over a generic `find(spec)`. Adopt specifications when the predicate matrix grows past ~5 named methods.
 - **Unit of Work** — Define a `UnitOfWork` output port; have infrastructure coordinate the transaction; use cases call `unitOfWork.run(async () => …)`. Never leak transaction objects into the application layer. Used when a single use case must update an aggregate _and_ an idempotency record (or similar) atomically.
-- **Domain events** — see §3.6.
-- **Sagas / process managers** — see §6.6.
-- **CQRS / Event Sourcing** — see §4.1.
+- **Event Sourcing** — see §4.1.
+
+Patterns that ship as worked examples (no longer "out of scope"):
+
+- **Domain events** — see §3.6 (`Order` aggregate, `EventPublisher` port).
+- **Sagas / process managers** — see §6.6 (`OrderConfirmationSaga`, `OrderProcess` aggregate).
+- **CQRS read-side projections** — see §4.1 (`OrderSummaryProjector`, `OrderSummaryReadModel`, `ListOrderSummaries`).
 
 ---
 
@@ -625,12 +629,12 @@ Default for new contexts in this repo: **Anticorruption Layer in both directions
 
 ### 6.6 Sagas / process managers
 
-This template does not ship a saga/process-manager mechanism. If you need one (multi-step workflow that survives process restarts and coordinates across aggregates):
+A worked example ships in `src/application/sagas/order-confirmation-saga.ts`. The saga subscribes to `OrderPlaced`, drives a two-step workflow (reserve inventory via `InventoryReservation` → confirm the order via the `ConfirmOrder` use case), and compensates by calling `CompensateOrderConfirmation` if the reservation fails. State lives in the `OrderProcess` aggregate (`src/domain/order/order-process.ts`), persisted via `OrderProcessRepository` with optimistic concurrency (§3.7).
 
 - The saga lives in `application/sagas/<name>.ts` and listens to domain events via the `EventPublisher` port (§3.6).
 - The saga's state is an aggregate of its own — persisted via its own repository, with the same atomicity rules (§3.7).
-- Compensating actions for partial failures are explicit use cases, not buried `try/catch` cleanup.
-- Sagas are **idempotent** by construction (§4.4) — the same event delivered twice produces the same final state.
+- Compensating actions for partial failures are explicit use cases (e.g. `CompensateOrderConfirmation`), not buried `try/catch` cleanup. The compensation is its own input port so the auth check that protects the user-driven `CancelOrder` doesn't apply to the system-initiated rollback.
+- Sagas are **idempotent** by construction (§4.4) — the same event delivered twice produces the same final state. The example dedupes on `OrderProcessRepository.findByOrderId(orderId)` before doing work, so at-least-once `OrderPlaced` delivery is safe.
 
 Don't smuggle a saga into a use case as a long `try { … } catch { rollback() }` block — that creates a hidden state machine no one can reason about.
 
@@ -700,34 +704,36 @@ Never edit the legacy code path to "improve it" mid-migration — that defeats t
 
 ## 7. Naming and file conventions
 
-| Concept             | File suffix / pattern                       | Example                                                        |
-| ------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| Entity              | `<name>.ts`                                 | `domain/user/user.ts`                                          |
-| Value object        | `<name>.ts`                                 | `domain/user/email.ts`                                         |
-| Typed id            | `<name>-id.ts`                              | `domain/user/user-id.ts`                                       |
-| Domain error        | grouped in `errors.ts` per aggregate        | `domain/user/errors.ts`                                        |
-| Domain service      | `services/<name>.ts`                        | `domain/order/services/pricing.ts`                             |
-| Domain event        | `events/<name>.ts`                          | `domain/order/events/order-cancelled.ts`                       |
-| Domain factory      | `factories/<name>-factory.ts`               | `domain/order/factories/order-factory.ts`                      |
-| Specification       | `specifications/<name>-spec.ts`             | `domain/user/specifications/active-user-spec.ts`               |
-| Use case            | `<verb>-<noun>.ts`                          | `application/use-cases/create-user.ts`                         |
-| Use-case decorator  | `<adjective>-<verb>-<noun>.ts`              | `application/use-cases/logged-create-user.ts`                  |
-| Application factory | `factories/<name>-factory.ts`               | `application/factories/order-factory.ts`                       |
-| Saga                | `sagas/<name>.ts`                           | `application/sagas/order-fulfillment.ts`                       |
-| Input port          | `<verb>-<noun>-use-case.ts`                 | `application/ports/input/create-user-use-case.ts`              |
-| Output port         | `<noun>.ts`                                 | `application/ports/output/user-repository.ts`                  |
-| Read-model port     | `<noun>-read-model.ts`                      | `application/ports/output/user-read-model.ts`                  |
-| Output boundary     | `<verb>-<noun>-output.ts`                   | `application/ports/output/create-user-output.ts`               |
-| DTO                 | `<noun>-dto.ts`                             | `application/dtos/user-dto.ts`                                 |
-| Mapper              | `<noun>-mapper.ts` (camelCase const export) | `application/mappers/user-mapper.ts`                           |
-| Adapter             | `<tech>-<port>.ts`                          | `infrastructure/persistence/json-file-user-repository.ts`      |
-| Adapter decorator   | `<adjective>-<port>.ts`                     | `infrastructure/persistence/cached-user-repository.ts`         |
-| Persistence record  | `<noun>-record.ts`                          | `infrastructure/persistence/user-record.ts`                    |
-| HTTP route file     | grouped per resource                        | `presentation/http/routes/users.ts`                            |
-| CLI command         | `<verb>-<noun>.ts`                          | `presentation/cli/commands/create-user.ts`                     |
-| Test data builder   | `<noun>-builder.ts`                         | `tests/user/builders/user-builder.ts`                          |
-| Contract test       | `<port>-contract.ts`                        | `tests/infrastructure/persistence/user-repository-contract.ts` |
-| Architecture test   | `<rule>.arch.test.ts`                       | `tests/architecture/dependency-rule.arch.test.ts`              |
+| Concept              | File suffix / pattern                       | Example                                                        |
+| -------------------- | ------------------------------------------- | -------------------------------------------------------------- |
+| Entity               | `<name>.ts`                                 | `domain/user/user.ts`                                          |
+| Value object         | `<name>.ts`                                 | `domain/user/email.ts`                                         |
+| Typed id             | `<name>-id.ts`                              | `domain/user/user-id.ts`                                       |
+| Domain error         | grouped in `errors.ts` per aggregate        | `domain/user/errors.ts`                                        |
+| Domain service       | `services/<name>.ts`                        | `domain/order/services/pricing.ts`                             |
+| Domain event         | `events/<name>.ts`                          | `domain/order/events/order-cancelled.ts`                       |
+| Domain factory       | `factories/<name>-factory.ts`               | `domain/order/factories/order-factory.ts`                      |
+| Specification        | `specifications/<name>-spec.ts`             | `domain/user/specifications/active-user-spec.ts`               |
+| Use case             | `<verb>-<noun>.ts`                          | `application/use-cases/create-user.ts`                         |
+| Use-case decorator   | `<adjective>-<verb>-<noun>.ts`              | `application/use-cases/logged-create-user.ts`                  |
+| Application factory  | `factories/<name>-factory.ts`               | `application/factories/order-factory.ts`                       |
+| Saga                 | `sagas/<name>.ts`                           | `application/sagas/order-confirmation-saga.ts`                 |
+| Saga state aggregate | `<name>-process.ts`                         | `domain/order/order-process.ts`                                |
+| Projector            | `projections/<name>-projector.ts`           | `application/projections/order-summary-projector.ts`           |
+| Input port           | `<verb>-<noun>-use-case.ts`                 | `application/ports/input/create-user-use-case.ts`              |
+| Output port          | `<noun>.ts`                                 | `application/ports/output/user-repository.ts`                  |
+| Read-model port      | `<noun>-read-model.ts`                      | `application/ports/output/user-read-model.ts`                  |
+| Output boundary      | `<verb>-<noun>-output.ts`                   | `application/ports/output/create-user-output.ts`               |
+| DTO                  | `<noun>-dto.ts`                             | `application/dtos/user-dto.ts`                                 |
+| Mapper               | `<noun>-mapper.ts` (camelCase const export) | `application/mappers/user-mapper.ts`                           |
+| Adapter              | `<tech>-<port>.ts`                          | `infrastructure/persistence/json-file-user-repository.ts`      |
+| Adapter decorator    | `<adjective>-<port>.ts`                     | `infrastructure/persistence/cached-user-repository.ts`         |
+| Persistence record   | `<noun>-record.ts`                          | `infrastructure/persistence/user-record.ts`                    |
+| HTTP route file      | grouped per resource                        | `presentation/http/routes/users.ts`                            |
+| CLI command          | `<verb>-<noun>.ts`                          | `presentation/cli/commands/create-user.ts`                     |
+| Test data builder    | `<noun>-builder.ts`                         | `tests/user/builders/user-builder.ts`                          |
+| Contract test        | `<port>-contract.ts`                        | `tests/infrastructure/persistence/user-repository-contract.ts` |
+| Architecture test    | `<rule>.arch.test.ts`                       | `tests/architecture/dependency-rule.arch.test.ts`              |
 
 ### 7.1 TypeScript-specific conventions
 

@@ -16,6 +16,7 @@ const exitCode = await runCli(process.argv.slice(2), {
 	cancelOrder: composed.cancelOrder,
 	getOrder: composed.getOrder,
 	listOrders: composed.listOrders,
+	listOrderSummaries: composed.listOrderSummaries,
 });
 
 process.exit(exitCode);

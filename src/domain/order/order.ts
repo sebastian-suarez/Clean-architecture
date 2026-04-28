@@ -3,10 +3,12 @@ import {
 	EmptyOrderError,
 	OrderAlreadyCancelledError,
 	OrderAlreadyShippedError,
+	OrderNotConfirmableError,
 	OrderNotMutableError,
 } from "#domain/order/errors.js";
 import { lineItemAdded } from "#domain/order/events/line-item-added.js";
 import { orderCancelled } from "#domain/order/events/order-cancelled.js";
+import { orderConfirmed } from "#domain/order/events/order-confirmed.js";
 import { orderPlaced } from "#domain/order/events/order-placed.js";
 import { type LineItem } from "#domain/order/line-item.js";
 import { Money } from "#domain/order/money.js";
@@ -125,6 +127,33 @@ export class Order {
 					aggregateId: this.id.value,
 					sku: item.sku.value,
 					quantity: item.quantity.value,
+					occurredAt: when,
+				}),
+			],
+		);
+	}
+
+	// Saga-driven transition (§6.6) — `OrderConfirmationSaga` calls
+	// `ConfirmOrder` once the inventory reservation succeeds. The saga
+	// passes its reservation id so the order carries an audit trail of
+	// which fulfillment attempt produced this state.
+	confirm(reservationId: string, when: Date): Order {
+		if (this.status.kind !== "placed") {
+			throw new OrderNotConfirmableError(this.id.value, this.status.kind);
+		}
+
+		return new Order(
+			this.id,
+			this.customerId,
+			this.placedAt,
+			this._items,
+			{ kind: "confirmed", reservationId, at: when.toISOString() },
+			this.version,
+			[
+				...this.events,
+				orderConfirmed({
+					aggregateId: this.id.value,
+					reservationId,
 					occurredAt: when,
 				}),
 			],

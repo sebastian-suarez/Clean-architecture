@@ -55,6 +55,11 @@ function makeDeps(overrides: Partial<CliDeps> = {}): CliDeps {
 				return { items: [], nextCursor: undefined };
 			},
 		},
+		listOrderSummaries: {
+			async execute() {
+				return { items: [], nextCursor: undefined };
+			},
+		},
 		...overrides,
 	};
 }

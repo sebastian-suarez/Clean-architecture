@@ -110,6 +110,36 @@ export class OrderNotMutableError extends DomainError {
 	}
 }
 
+export class OrderNotConfirmableError extends DomainError {
+	get code(): string {
+		return "ORDER_NOT_CONFIRMABLE";
+	}
+
+	constructor(id: string, status: string) {
+		super(`Order ${id} cannot be confirmed from status "${status}"`);
+	}
+}
+
+export class InvalidOrderProcessIdError extends DomainError {
+	get code(): string {
+		return "INVALID_ORDER_PROCESS_ID";
+	}
+
+	constructor(value: string) {
+		super(`Invalid order-process id: ${value}`);
+	}
+}
+
+export class OrderProcessTransitionError extends DomainError {
+	get code(): string {
+		return "ORDER_PROCESS_TRANSITION";
+	}
+
+	constructor(id: string, from: string, to: string) {
+		super(`Order-process ${id} cannot transition from "${from}" to "${to}"`);
+	}
+}
+
 export class CustomerNotFoundError extends DomainError {
 	get code(): string {
 		return "CUSTOMER_NOT_FOUND";
