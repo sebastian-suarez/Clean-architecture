@@ -5,7 +5,7 @@
 
 ## Context
 
-`AGENTS.md` §3.6 (domain events), §6.6 (sagas / process managers), and §4.1 (CQRS) used to describe these patterns as "out of scope by default — adopt only when conditions A/B/C apply." That stance kept the template lean but left the rules abstract: a contributor adopting one of these patterns had no in-repo example to mirror, so the inevitable first attempt would re-derive the conventions from prose and miss details (e.g., the saga's optimistic-concurrency reload, the read-model's read/write port split).
+`AGENTS.md` §3.6 (domain events), §6.6 (sagas / process managers), and §4.1 (CQRS) used to describe these patterns as "out of scope by default — adopt only when conditions A/B/C apply." That stance kept the repo lean but left the rules abstract: a contributor adopting one of these patterns had no in-repo example to mirror, so the inevitable first attempt would re-derive the conventions from prose and miss details (e.g., the saga's optimistic-concurrency reload, the read-model's read/write port split).
 
 ## Decision
 

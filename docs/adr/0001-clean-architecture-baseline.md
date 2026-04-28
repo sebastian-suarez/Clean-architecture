@@ -5,7 +5,7 @@
 
 ## Context
 
-This repository is a template for new TypeScript / Node.js services. It must demonstrate Clean Architecture / Hexagonal / DDD patterns concretely enough that a reader can copy it and start building.
+This repository is an educational reference for Clean Architecture / Hexagonal / DDD in TypeScript / Node.js. It must demonstrate the patterns concretely enough that a reader can study them in working code and apply them to their own services.
 
 ## Decision
 

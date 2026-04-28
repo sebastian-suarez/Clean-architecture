@@ -43,7 +43,7 @@ export class OrderSummaryProjector {
 			const added = event as LineItemAdded;
 			// `LineItemAdded` only updates lastActivityAt — totals are
 			// recomputed from the next `OrderPlaced`/`OrderConfirmed` event
-			// in this template's simplified projector. A real projector
+			// in this repo's simplified projector. A real projector
 			// might re-fetch the aggregate to recompute the total.
 			await this.projection.patchStatus({
 				id: added.aggregateId,

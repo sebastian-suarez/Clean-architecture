@@ -1,27 +1,28 @@
 {
-	"name": "clean-architecture-template",
+	"name": "clean-architecture",
 	"version": "0.1.0",
-	"description": "Clean Architecture template for Node.js with TypeScript, ESM, Vitest, XO, and Prettier. Layered structure (domain, application, infrastructure, presentation) ready to fork for new projects.",
+	"description": "Educational reference for Clean Architecture / Ports & Adapters / DDD in Node.js + TypeScript (ESM). Demonstrates the layered structure (domain, application, infrastructure, presentation), use-case decorators, sagas, CQRS projection, and architectural fitness tests.",
 	"keywords": [
 		"clean-architecture",
 		"hexagonal",
 		"ports-and-adapters",
 		"DDD",
 		"TypeScript",
-		"template",
+		"educational",
+		"reference",
 		"Node.js",
 		"ESM",
 		"Vitest",
 		"XO",
 		"Prettier"
 	],
-	"homepage": "https://github.com/sebastian-suarez/Clean-architecture-template#readme",
+	"homepage": "https://github.com/sebastian-suarez/Clean-architecture#readme",
 	"bugs": {
-		"url": "https://github.com/sebastian-suarez/Clean-architecture-template/issues"
+		"url": "https://github.com/sebastian-suarez/Clean-architecture/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/sebastian-suarez/Clean-architecture-template.git"
+		"url": "git+https://github.com/sebastian-suarez/Clean-architecture.git"
 	},
 	"license": "MIT",
 	"author": "Sebastian Suarez <261091557+sebastian-suarez@users.noreply.github.com> (https://www.sebastiansuarez.dev)",

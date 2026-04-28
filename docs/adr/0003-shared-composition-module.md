@@ -7,7 +7,7 @@
 
 `AGENTS.md` §2.5 states: "If wiring grows complex, extract a `compose<X>(config)` factory in the same file — never in a separate 'container' module that other layers might import."
 
-The template ships three composition roots — `src/index.ts` (CLI), `src/server.ts` (HTTP), `src/worker.ts` (queue) — and the bulk of their wiring is identical: ~25 adapter constructions, ~10 use-case constructions, several decorator stacks. Inlining would mean ~200 lines of literal duplication across three files; a new use case would need to be wired in three places.
+This repo ships three composition roots — `src/index.ts` (CLI), `src/server.ts` (HTTP), `src/worker.ts` (queue) — and the bulk of their wiring is identical: ~25 adapter constructions, ~10 use-case constructions, several decorator stacks. Inlining would mean ~200 lines of literal duplication across three files; a new use case would need to be wired in three places.
 
 ## Decision
 

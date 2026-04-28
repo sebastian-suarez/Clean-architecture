@@ -1,14 +1,14 @@
-# 🧱 Clean Architecture Template
+# 🧱 Clean Architecture
 
-A TypeScript + Node.js (ESM) template that scaffolds a project around **Clean Architecture** / **Ports & Adapters** / **DDD**. Fork it as a base for new services, APIs, CLIs, or workers.
+An educational TypeScript + Node.js (ESM) reference for **Clean Architecture** / **Ports & Adapters** / **DDD**. It is study material — the goal is to show every pattern in working code, not to ship a starter you fork.
 
 > **Read [`AGENTS.md`](./AGENTS.md) before contributing.** It is the binding contract for layer boundaries, naming, forbidden patterns, and testing conventions.
 
 ---
 
-## 🎯 What this template demonstrates
+## 🎯 What this repository demonstrates
 
-The template is intentionally larger than a "Hello World" because the goal is to demonstrate **every** Clean Architecture / DDD / Hexagonal pattern in working code:
+The repository is intentionally larger than a "Hello World" because the goal is to demonstrate **every** Clean Architecture / DDD / Hexagonal pattern in working code:
 
 - **Two bounded contexts** (`User`, `Order`) with their own ubiquitous languages.
 - **Rich entities** with private constructors, `static create` (creation invariants) + `static reconstruct` (hydration), behavior methods, domain events.
@@ -213,11 +213,11 @@ Run all of it: `npm test -- --run`.
 
 ---
 
-## 🚀 Using as a template
+## 🚀 How to use this repository
 
-1. Click **Use this template** on GitHub (or `git clone` and re-init).
-2. Update `name`, `description`, and repo URLs in `package.json`.
-3. Decide what to keep:
-   - Keep the User context as the auth/identity surface; replace Order with your own primary aggregate.
-   - Or strip both and use the patterns (decorators, saga, ACL, queue worker, contract tests, arch tests) as a scaffolding kit.
-4. Read [`AGENTS.md`](./AGENTS.md) §8 for the recipes (add a use case, add an aggregate, add an adapter, add a delivery mechanism, …).
+This repo is structured as study material, not as a starter to fork. To get the most out of it:
+
+1. Read [`AGENTS.md`](./AGENTS.md) end-to-end — it states the rules and the *why* behind each one.
+2. Walk the code in dependency order: `domain/` → `application/` → `infrastructure/` → `presentation/`.
+3. Run `npm test -- --run` to see the architectural fitness functions enforce the rules.
+4. Use the recipes in [`AGENTS.md`](./AGENTS.md) §8 (add a use case, add an aggregate, add an adapter, add a delivery mechanism) as exercises in your own scratch project.

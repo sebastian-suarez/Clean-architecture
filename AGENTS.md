@@ -2,7 +2,7 @@
 
 This file is a **hard contract** for any contributor (human or AI) working in this repository. The architecture is the product. If a change violates the rules below, it is wrong, regardless of how convenient it is.
 
-The rules here are derived from Robert C. Martin's _Clean Architecture_, Eric Evans's _Domain-Driven Design_, Vaughn Vernon's _Implementing DDD_, the Hexagonal / Ports & Adapters pattern by Alistair Cockburn, Jeffrey Palermo's Onion Architecture, and Gerard Meszaros's _xUnit Test Patterns_. Where these traditions disagree, the choice the template makes is stated explicitly.
+The rules here are derived from Robert C. Martin's _Clean Architecture_, Eric Evans's _Domain-Driven Design_, Vaughn Vernon's _Implementing DDD_, the Hexagonal / Ports & Adapters pattern by Alistair Cockburn, Jeffrey Palermo's Onion Architecture, and Gerard Meszaros's _xUnit Test Patterns_. Where these traditions disagree, the choice this repo makes is stated explicitly.
 
 ---
 
@@ -110,7 +110,7 @@ Components in this codebase = top-level layers and bounded contexts. The cohesio
 - **CCP (Common Closure)** — Group classes that change for the same reasons. Things that change together belong together. (This is SRP at component scale.)
 - **CRP (Common Reuse)** — Don't force consumers to depend on things they don't use. Group classes that are reused together. (This is ISP at component scale.)
 
-These three are in tension: maximizing one hurts the others. The template trades CRP for CCP inside a bounded context (one folder per context, fine-grained reuse not a goal) and trades CCP for CRP across contexts (no shared kernel by default — see §6.5).
+These three are in tension: maximizing one hurts the others. This repo trades CRP for CCP inside a bounded context (one folder per context, fine-grained reuse not a goal) and trades CCP for CRP across contexts (no shared kernel by default — see §6.5).
 
 **Coupling — how components depend on each other:**
 
@@ -144,13 +144,13 @@ Boundaries are crossed by **data**, not by **objects with behavior**. If a value
 
 ### 1.6 What "Clean Architecture" inherits from related styles
 
-This template is the intersection of three traditions; all are honored:
+This repo is the intersection of three traditions; all are honored:
 
 - **Clean Architecture (Martin)** — concentric circles, dependency rule, use cases at the center.
 - **Hexagonal / Ports & Adapters (Cockburn)** — ports as the symmetric boundary; driving (input) and driven (output) sides; adapters as plugins.
 - **Onion Architecture (Palermo)** — domain at the center; application services around it; infrastructure on the outside; explicit invertion via interfaces in inner layers.
 
-When the templates pick a side, they pick Hexagonal vocabulary (port/adapter), Clean's concentric model, and DDD's tactical patterns inside the domain.
+When this repo picks a side, it picks Hexagonal vocabulary (port/adapter), Clean's concentric model, and DDD's tactical patterns inside the domain.
 
 ---
 
@@ -276,7 +276,7 @@ If you need a new env var:
 
 ### 3.1 Entities
 
-- Have a stable identity. Use a **typed id value object** (`UserId`, `OrderId`) rather than a bare `string`. Typed ids prevent silent argument swaps (`get(orderId, userId)` vs `get(userId, orderId)`) and document intent at call sites. The id VO wraps a `string` (or UUID/ULID) and is generated via the `IdGenerator` port (§6.2). The template's `User` uses a bare `string` for brevity — production bounded contexts should upgrade to a typed id (recipe in §8.4).
+- Have a stable identity. Use a **typed id value object** (`UserId`, `OrderId`) rather than a bare `string`. Typed ids prevent silent argument swaps (`get(orderId, userId)` vs `get(userId, orderId)`) and document intent at call sites. The id VO wraps a `string` (or UUID/ULID) and is generated via the `IdGenerator` port (§6.2). This repo's `User` uses a bare `string` for brevity — production bounded contexts should upgrade to a typed id (recipe in §8.4).
 - All fields `readonly`. State changes either produce a new instance or are applied through behavior methods that validate invariants before reconstruction.
 - Use a **private constructor** plus a **static `create(props): Entity`** factory. A separate `reconstruct(props)` static must exist for hydration from persistence. The `constructor` is never `public`.
 - **`create` vs `reconstruct`.** `create(props)` runs all creation invariants ("a new order must have at least one line item"). `reconstruct(props)` rehydrates from persistence and must **not** re-run creation-only invariants — past data may have been valid under older rules, and refusing to load it would brick the system. `reconstruct` still validates structural shape (types, non-null fields). Persistence adapters always go through `reconstruct`, never `create`.
@@ -331,7 +331,7 @@ If you need a new env var:
 
 ### 3.6 Domain events
 
-The template ships a worked example. The Order aggregate buffers events in `src/domain/order/events/` (`OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `LineItemAdded`); use cases (`PlaceOrder`, `ConfirmOrder`, `CancelOrder`) dispatch them via the `EventPublisher` port (`src/application/ports/output/event-publisher.ts`) after `repository.save`. The `InMemoryEventPublisher` adapter delivers to in-process subscribers (the saga and the projector — §6.6, §4.1).
+This repo ships a worked example. The Order aggregate buffers events in `src/domain/order/events/` (`OrderPlaced`, `OrderConfirmed`, `OrderCancelled`, `LineItemAdded`); use cases (`PlaceOrder`, `ConfirmOrder`, `CancelOrder`) dispatch them via the `EventPublisher` port (`src/application/ports/output/event-publisher.ts`) after `repository.save`. The `InMemoryEventPublisher` adapter delivers to in-process subscribers (the saga and the projector — §6.6, §4.1).
 
 - Events are **past-tense facts**: `OrderCancelled`, `UserRegistered`. Never `OrderCancelling` or `RegisterUser`.
 - Events live in `src/domain/<context>/events/<name>.ts` as plain immutable types — same rules as DTOs (primitives only, `readonly`, serializable).
@@ -523,7 +523,7 @@ Presentation implements `CreateUserOutput` (the route writes JSON, the CLI write
   type Pagination = { readonly cursor?: string; readonly limit: number }; // limit ∈ [1, 100]
   ```
 
-  `findAll(): Promise<User[]>` is acceptable in this template only because the dataset is small and the boundary case is "in-memory test fixture." A production repository must offer a paginated alternative; if both exist, the unbounded one should be commented as test-only.
+  `findAll(): Promise<User[]>` is acceptable in this repo only because the dataset is small and the boundary case is "in-memory test fixture." A production repository must offer a paginated alternative; if both exist, the unbounded one should be commented as test-only.
 
 - **Optimistic concurrency** (§3.7): if the aggregate carries a `version`, the repository's `save` rejects stale writes with `ConcurrencyError`. Every adapter — including in-memory — implements this consistently.
 - **Read model ports** are _not_ repositories — they return DTOs and may be backed by a denormalized projection. Don't bend a repository to serve query DTOs (§4.1).
@@ -548,7 +548,7 @@ When integrating a foreign system whose model conflicts with the domain (legacy 
 
 ### 5.5 Out of scope by default
 
-These DDD/CA-adjacent patterns are not used in this template. If you need one, follow the convention below; don't invent a new one.
+These DDD/CA-adjacent patterns are not used in this repo. If you need one, follow the convention below; don't invent a new one.
 
 - **Specifications** — A `Specification<T>` is a reusable predicate object (`new ActiveUserSpec().and(new SignedUpAfterSpec(date))`). Useful when (a) the same predicate appears in multiple places, (b) predicates compose freely, (c) the persistence layer can translate the spec to a query. **Prefer adding a domain-named repository method (`findActiveBefore`)** over a generic `find(spec)`. Adopt specifications when the predicate matrix grows past ~5 named methods.
 - **Unit of Work** — Define a `UnitOfWork` output port; have infrastructure coordinate the transaction; use cases call `unitOfWork.run(async () => …)`. Never leak transaction objects into the application layer. Used when a single use case must update an aggregate _and_ an idempotency record (or similar) atomically.
